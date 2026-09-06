@@ -3,45 +3,694 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Host and display embedded X (Twitter) posts on your site.">
     <title>Embedded Tweet Viewer</title>
     <style>
+        :root {
+            --bg: #0f1419;
+            --surface: #16202a;
+            --surface-elevated: #1e2732;
+            --border: #2f3336;
+            --text: #e7e9ea;
+            --text-muted: #8b98a5;
+            --accent: #1d9bf0;
+            --accent-hover: #1a8cd8;
+            --danger: #f4212e;
+            --success: #00ba7c;
+            --radius: 16px;
+            --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f5f8fa;
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--font);
+            background:
+                radial-gradient(ellipse at top, rgba(29, 155, 240, 0.12), transparent 55%),
+                var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 1.25rem 4rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .brand-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.04em;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(1.6rem, 3vw, 2.2rem);
+            letter-spacing: -0.03em;
+        }
+
+        .subtitle {
+            margin: 0.5rem auto 0;
+            max-width: 42rem;
+            color: var(--text-muted);
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .panel h2 {
+            margin: 0 0 0.35rem;
+            font-size: 1.05rem;
+        }
+
+        .panel p {
+            margin: 0 0 1rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .controls {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            background: var(--surface-elevated);
+            color: var(--text);
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            font: inherit;
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(29, 155, 240, 0.2);
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.85rem;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        button,
+        .button {
+            appearance: none;
+            border: none;
+            border-radius: 999px;
+            padding: 0.7rem 1.15rem;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--surface-elevated);
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--danger);
+            border: 1px solid rgba(244, 33, 46, 0.35);
+        }
+
+        .btn-danger:hover {
+            background: rgba(244, 33, 46, 0.1);
+        }
+
+        .status {
+            min-height: 1.25rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        .status.success {
+            color: var(--success);
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .toolbar h2 {
+            margin: 0;
+            font-size: 1.15rem;
+        }
+
+        .count {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+            gap: 1.25rem;
+            align-items: start;
+        }
+
+        .tweet-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem 1rem 0.75rem;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tweet-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .tweet-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            word-break: break-all;
+        }
+
+        .tweet-meta a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .tweet-meta a:hover {
+            text-decoration: underline;
+        }
+
+        .tweet-slot {
+            min-height: 120px;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
-            margin: 0;
-            padding: 2rem 1rem;
         }
-        .tweet-container {
-            background-color: #ffffff;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
-            width: 100%;
+
+        .tweet-slot .twitter-tweet {
+            margin: 0 !important;
         }
-        h2 {
+
+        .empty {
             text-align: center;
-            color: #1da1f2;
-            margin-top: 0;
-            margin-bottom: 1.5rem;
+            padding: 3rem 1.5rem;
+            border: 1px dashed var(--border);
+            border-radius: var(--radius);
+            color: var(--text-muted);
+            background: rgba(22, 32, 42, 0.6);
+        }
+
+        .empty strong {
+            color: var(--text);
+            display: block;
+            margin-bottom: 0.35rem;
+        }
+
+        .hint {
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .hint code,
+        footer code {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.1rem 0.35rem;
+            font-size: 0.8rem;
+        }
+
+        footer {
+            margin-top: 2.5rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 640px) {
+            .page {
+                padding: 1.25rem 0.85rem 3rem;
+            }
+
+            .panel {
+                padding: 1rem;
+            }
+
+            .row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            button {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="page">
+        <header>
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">X</div>
+                <h1>Embedded Tweet Viewer</h1>
+            </div>
+            <p class="subtitle">
+                Paste an X post URL or official embed code to host clean, interactive embeds on your site.
+                Content stays synced with X via the official widgets integration.
+            </p>
+        </header>
 
-    <div class="tweet-container">
-        <h2>Chess Match Highlight</h2>
-        
-        <!-- Embedded Tweet Start -->
-        <blockquote class="twitter-tweet"><p lang="en" dir="ltr">This is a cheater that I played against. Notice he had a 95.7% win rate game and his account was closed for fair play.<br><br>I Queen Sacrificed against this guy and was ahead. You all need to understand from my perspective I think I am performing poorly. I have a day job and work to… <a href="https://t.co/gbUYA60kUs">pic.twitter.com/gbUYA60kUs</a></p>&mdash; Bijan Pourazari (@bjguru24) <a href="https://x.com/bjguru24/status/2096694989728440498?ref_src=twsrc%5Etfw">September 6, 2026</a></blockquote> 
-        <script async src="https://platform.x.com/widgets.js" charset="utf-8"></script>
-        <!-- Embedded Tweet End -->
-        
+        <section class="panel" aria-labelledby="add-heading">
+            <h2 id="add-heading">Add a post</h2>
+            <p>
+                Use either a status URL (from Share → Copy link) or the full HTML from
+                <strong>Embed post</strong>. Posts are saved in this browser and re-render with X widgets.
+            </p>
+
+            <div class="controls">
+                <div>
+                    <label for="tweet-input">Post URL or embed HTML</label>
+                    <textarea
+                        id="tweet-input"
+                        placeholder="https://x.com/bjguru24/status/2096694989728440498
+
+or paste a full &lt;blockquote class=&quot;twitter-tweet&quot;&gt;…&lt;/blockquote&gt; embed"
+                        spellcheck="false"
+                    ></textarea>
+                </div>
+                <div class="row">
+                    <button type="button" class="btn-primary" id="add-btn">Add embed</button>
+                    <button type="button" class="btn-secondary" id="demo-btn">Load sample post</button>
+                    <button type="button" class="btn-danger" id="clear-btn">Clear all</button>
+                </div>
+                <div class="status" id="status" role="status" aria-live="polite"></div>
+                <p class="hint">
+                    Tip: for a permanent public page, add tweet IDs to the
+                    <code>DEFAULT_TWEETS</code> array near the bottom of <code>index.html</code>.
+                </p>
+            </div>
+        </section>
+
+        <div class="toolbar">
+            <h2>Your embeds</h2>
+            <div class="count" id="count">0 posts</div>
+        </div>
+
+        <div id="gallery" class="gallery" aria-live="polite"></div>
+
+        <footer>
+            Powered by the official X <code>widgets.js</code> embed · Works best with an internet connection
+        </footer>
     </div>
 
+    <script>
+        /**
+         * Seed posts shown on first visit (and as a permanent baseline you can edit).
+         * Prefer status IDs or full x.com / twitter.com status URLs.
+         */
+        const DEFAULT_TWEETS = [
+            {
+                id: "2096694989728440498",
+                url: "https://x.com/bjguru24/status/2096694989728440498",
+                html: '<blockquote class="twitter-tweet"><p lang="en" dir="ltr">This is a cheater that I played against. Notice he had a 95.7% win rate game and his account was closed for fair play.<br><br>I Queen Sacrificed against this guy and was ahead. You all need to understand from my perspective I think I am performing poorly. I have a day job and work to… <a href="https://t.co/gbUYA60kUs">pic.twitter.com/gbUYA60kUs</a></p>&mdash; Bijan Pourazari (@bjguru24) <a href="https://x.com/bjguru24/status/2096694989728440498?ref_src=twsrc%5Etfw">September 6, 2026</a></blockquote>'
+            }
+        ];
+
+        const STORAGE_KEY = "embedded-tweet-viewer:v1";
+        const STATUS_URL_RE = /(?:https?:\/\/)?(?:www\.)?(?:x|twitter)\.com\/(?:#!\/)?(\w+)\/status(?:es)?\/(\d+)/i;
+        const STATUS_ID_RE = /^\d{5,25}$/;
+
+        const galleryEl = document.getElementById("gallery");
+        const inputEl = document.getElementById("tweet-input");
+        const statusEl = document.getElementById("status");
+        const countEl = document.getElementById("count");
+        const addBtn = document.getElementById("add-btn");
+        const demoBtn = document.getElementById("demo-btn");
+        const clearBtn = document.getElementById("clear-btn");
+
+        let tweets = loadTweets();
+        let widgetsReady = null;
+
+        function setStatus(message, type) {
+            statusEl.textContent = message || "";
+            statusEl.className = "status" + (type ? " " + type : "");
+        }
+
+        function loadTweets() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length) {
+                        return parsed.map(function (t) {
+                            var copy = Object.assign({}, t);
+                            if (copy.html) {
+                                copy.html = sanitizeEmbedHtml(copy.html) || null;
+                            }
+                            return copy;
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not read saved tweets", err);
+            }
+            return DEFAULT_TWEETS.map(function (t) {
+                var copy = Object.assign({}, t);
+                if (copy.html) {
+                    copy.html = sanitizeEmbedHtml(copy.html) || copy.html;
+                }
+                return copy;
+            });
+        }
+
+        function saveTweets() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(tweets));
+            } catch (err) {
+                console.warn("Could not save tweets", err);
+            }
+        }
+
+        function sanitizeEmbedHtml(html) {
+            if (!html) {
+                return null;
+            }
+            const template = document.createElement("template");
+            template.innerHTML = html;
+            template.content.querySelectorAll("script").forEach(function (node) {
+                node.remove();
+            });
+            const blockquote = template.content.querySelector("blockquote");
+            return blockquote ? blockquote.outerHTML : null;
+        }
+
+        function extractFromInput(raw) {
+            const value = (raw || "").trim();
+            if (!value) {
+                throw new Error("Paste a post URL or embed HTML first.");
+            }
+
+            if (STATUS_ID_RE.test(value)) {
+                return {
+                    id: value,
+                    url: "https://x.com/i/status/" + value,
+                    html: null
+                };
+            }
+
+            const urlMatch = value.match(STATUS_URL_RE);
+            if (urlMatch) {
+                return {
+                    id: urlMatch[2],
+                    url: "https://x.com/" + urlMatch[1] + "/status/" + urlMatch[2],
+                    html: null
+                };
+            }
+
+            const template = document.createElement("template");
+            template.innerHTML = value;
+            const blockquote = template.content.querySelector("blockquote.twitter-tweet, blockquote");
+            if (blockquote) {
+                const anchor = blockquote.querySelector('a[href*="/status"]');
+                const href = anchor ? anchor.getAttribute("href") : "";
+                const match = href && href.match(STATUS_URL_RE);
+                if (!match) {
+                    throw new Error("Embed HTML was found, but no status URL could be parsed.");
+                }
+                return {
+                    id: match[2],
+                    url: "https://x.com/" + match[1] + "/status/" + match[2],
+                    html: sanitizeEmbedHtml(blockquote.outerHTML)
+                };
+            }
+
+            throw new Error("Could not parse input. Use an x.com status URL or official embed HTML.");
+        }
+
+        function ensureWidgets() {
+            if (window.twttr && window.twttr.widgets) {
+                return Promise.resolve(window.twttr);
+            }
+
+            if (widgetsReady) {
+                return widgetsReady;
+            }
+
+            widgetsReady = new Promise(function (resolve, reject) {
+                const existing = document.querySelector('script[src*="platform.twitter.com/widgets.js"], script[src*="platform.x.com/widgets.js"]');
+                if (existing && window.twttr) {
+                    window.twttr.ready(resolve);
+                    return;
+                }
+
+                const script = document.createElement("script");
+                script.src = "https://platform.twitter.com/widgets.js";
+                script.async = true;
+                script.charset = "utf-8";
+                script.onload = function () {
+                    if (window.twttr && window.twttr.ready) {
+                        window.twttr.ready(resolve);
+                    } else {
+                        reject(new Error("X widgets failed to initialize."));
+                    }
+                };
+                script.onerror = function () {
+                    reject(new Error("Could not load X widgets.js. Check your network connection."));
+                };
+                document.body.appendChild(script);
+            });
+
+            return widgetsReady;
+        }
+
+        function updateCount() {
+            const n = tweets.length;
+            countEl.textContent = n === 1 ? "1 post" : n + " posts";
+        }
+
+        function renderEmpty() {
+            galleryEl.className = "";
+            galleryEl.innerHTML = ''
+                + '<div class="empty">'
+                + '<strong>No embeds yet</strong>'
+                + 'Add a post URL or paste embed HTML above to start hosting content from X.'
+                + '</div>';
+        }
+
+        function renderGallery() {
+            updateCount();
+
+            if (!tweets.length) {
+                renderEmpty();
+                return Promise.resolve();
+            }
+
+            galleryEl.className = "gallery";
+            galleryEl.innerHTML = "";
+
+            const cards = tweets.map(function (tweet) {
+                const card = document.createElement("article");
+                card.className = "tweet-card";
+                card.dataset.id = tweet.id;
+
+                const header = document.createElement("div");
+                header.className = "tweet-card-header";
+
+                const meta = document.createElement("div");
+                meta.className = "tweet-meta";
+                const link = document.createElement("a");
+                link.href = tweet.url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = tweet.url;
+                meta.appendChild(link);
+
+                const removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "btn-danger";
+                removeBtn.textContent = "Remove";
+                removeBtn.addEventListener("click", function () {
+                    removeTweet(tweet.id);
+                });
+
+                header.appendChild(meta);
+                header.appendChild(removeBtn);
+
+                const slot = document.createElement("div");
+                slot.className = "tweet-slot";
+                slot.dataset.slot = tweet.id;
+
+                if (tweet.html) {
+                    slot.innerHTML = tweet.html;
+                }
+
+                card.appendChild(header);
+                card.appendChild(slot);
+                galleryEl.appendChild(card);
+                return { tweet: tweet, slot: slot };
+            });
+
+            return ensureWidgets().then(function (twttr) {
+                return Promise.all(cards.map(function (item) {
+                    const tweet = item.tweet;
+                    const slot = item.slot;
+                    slot.innerHTML = "";
+                    if (tweet.html) {
+                        slot.innerHTML = tweet.html;
+                        return twttr.widgets.load(slot);
+                    }
+                    return twttr.widgets.createTweet(tweet.id, slot, {
+                        theme: "dark",
+                        dnt: true,
+                        align: "center"
+                    });
+                }));
+            }).catch(function (err) {
+                setStatus((err && err.message) || "Failed to render embeds.", "error");
+            });
+        }
+
+        function addTweetFromInput() {
+            try {
+                const parsed = extractFromInput(inputEl.value);
+                if (tweets.some(function (t) { return t.id === parsed.id; })) {
+                    setStatus("That post is already in the gallery.", "error");
+                    return;
+                }
+                tweets.unshift(parsed);
+                saveTweets();
+                inputEl.value = "";
+                setStatus("Embed added.", "success");
+                renderGallery();
+            } catch (err) {
+                setStatus(err.message, "error");
+            }
+        }
+
+        function removeTweet(id) {
+            tweets = tweets.filter(function (t) { return t.id !== id; });
+            saveTweets();
+            setStatus("Embed removed.", "success");
+            renderGallery();
+        }
+
+        function clearAll() {
+            if (!tweets.length) {
+                setStatus("Gallery is already empty.", "error");
+                return;
+            }
+            if (!confirm("Remove all embedded posts from this browser?")) {
+                return;
+            }
+            tweets = [];
+            saveTweets();
+            setStatus("All embeds cleared.", "success");
+            renderGallery();
+        }
+
+        function loadSample() {
+            const sample = DEFAULT_TWEETS[0];
+            if (tweets.some(function (t) { return t.id === sample.id; })) {
+                setStatus("Sample post is already loaded.", "error");
+                return;
+            }
+            tweets.unshift(Object.assign({}, sample));
+            saveTweets();
+            setStatus("Sample post added.", "success");
+            renderGallery();
+        }
+
+        addBtn.addEventListener("click", addTweetFromInput);
+        demoBtn.addEventListener("click", loadSample);
+        clearBtn.addEventListener("click", clearAll);
+        inputEl.addEventListener("keydown", function (event) {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                addTweetFromInput();
+            }
+        });
+
+        renderGallery();
+    </script>
 </body>
 </html>
