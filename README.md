@@ -6,7 +6,7 @@ Paste a post URL or the HTML from **Embed post**, and the viewer renders it with
 
 ## Included files
 
-- `index.html` — single-page gallery UI, styling, local storage, and X widget loader
+- `index.html` — single-page gallery UI, styling, first-party cookie persistence, and X widget loader
 - `README.md` — project docs
 
 ## Getting started
@@ -30,7 +30,7 @@ Supported inputs:
 - Bare status IDs
 - Official `<blockquote class="twitter-tweet">…</blockquote>` embed snippets
 
-Posts you add are saved in `localStorage` for that browser.
+Posts you add are saved in first-party cookies on that browser (no server or account required). Only compact status IDs and URLs are stored so the payload stays lightweight; live embeds are rebuilt with X widgets on each visit.
 
 ### Permanently in the page (for public hosting)
 
@@ -60,6 +60,7 @@ This keeps compliance with X’s embed path while still letting you curate a gal
 ## Notes
 
 - Embeds require access to X’s widget endpoints; blocked networks or strict privacy tools may prevent rendering.
+- Gallery membership is stored in first-party cookies (`SameSite=Lax`, 1-year expiry) on the visitor’s device. Serve the page over `http://` or `https://` so cookies can persist (opening the file directly as `file://` is unreliable for cookies).
 - Removing a card only affects the local gallery, not the original post on X.
 - For a multi-author archive, keep adding status URLs; the layout is a responsive card grid.
 

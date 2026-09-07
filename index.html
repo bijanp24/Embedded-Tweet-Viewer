@@ -345,7 +345,8 @@
             <h2 id="add-heading">Add a post</h2>
             <p>
                 Use either a status URL (from Share → Copy link) or the full HTML from
-                <strong>Embed post</strong>. Posts are saved in this browser and re-render with X widgets.
+                <strong>Embed post</strong>. Posts are saved locally in first-party browser cookies
+                and re-render with X widgets.
             </p>
 
             <div class="controls">
@@ -397,7 +398,11 @@ or paste a full &lt;blockquote class=&quot;twitter-tweet&quot;&gt;…&lt;/blockq
             }
         ];
 
-        const STORAGE_KEY = "embedded-tweet-viewer:v1";
+        const STORAGE_KEY = "embedded-tweet-viewer-v1";
+        const STORAGE_META_KEY = STORAGE_KEY + "-n";
+        // Keep well under typical ~4KB cookie limits; payload is chunked if needed.
+        const COOKIE_MAX_CHARS = 3000;
+        const COOKIE_MAX_AGE_DAYS = 365;
         const STATUS_URL_RE = /(?:https?:\/\/)?(?:www\.)?(?:x|twitter)\.com\/(?:#!\/)?(\w+)\/status(?:es)?\/(\d+)/i;
         const STATUS_ID_RE = /^\d{5,25}$/;
 
@@ -409,7 +414,7 @@ or paste a full &lt;blockquote class=&quot;twitter-tweet&quot;&gt;…&lt;/blockq
         const demoBtn = document.getElementById("demo-btn");
         const clearBtn = document.getElementById("clear-btn");
 
-        let tweets = loadTweets();
+        let tweets = [];
         let widgetsReady = null;
 
         function setStatus(message, type) {
@@ -417,38 +422,158 @@ or paste a full &lt;blockquote class=&quot;twitter-tweet&quot;&gt;…&lt;/blockq
             statusEl.className = "status" + (type ? " " + type : "");
         }
 
+        function cookieExpires(days) {
+            return new Date(Date.now() + days * 864e5).toUTCString();
+        }
+
+        function writeCookie(name, value, days) {
+            document.cookie = name + "=" + encodeURIComponent(value)
+                + "; expires=" + cookieExpires(days)
+                + "; path=/"
+                + "; SameSite=Lax";
+        }
+
+        function readCookie(name) {
+            const prefix = name + "=";
+            const parts = document.cookie ? document.cookie.split("; ") : [];
+            for (var i = 0; i < parts.length; i++) {
+                if (parts[i].indexOf(prefix) === 0) {
+                    return decodeURIComponent(parts[i].slice(prefix.length));
+                }
+            }
+            return null;
+        }
+
+        function deleteCookie(name) {
+            document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax";
+        }
+
+        function chunkString(value, size) {
+            const chunks = [];
+            for (var i = 0; i < value.length; i += size) {
+                chunks.push(value.slice(i, i + size));
+            }
+            return chunks.length ? chunks : [""];
+        }
+
+        function clearStoredCookies() {
+            const meta = readCookie(STORAGE_META_KEY);
+            const count = meta ? parseInt(meta, 10) : 0;
+            if (count > 0) {
+                for (var i = 0; i < count; i++) {
+                    deleteCookie(STORAGE_KEY + "-" + i);
+                }
+            }
+            // Also clear a single-cookie legacy key if present.
+            deleteCookie(STORAGE_KEY);
+            deleteCookie(STORAGE_META_KEY);
+        }
+
+        function readStoredPayload() {
+            const meta = readCookie(STORAGE_META_KEY);
+            if (meta) {
+                const count = parseInt(meta, 10);
+                if (!count || count < 1) {
+                    return null;
+                }
+                var payload = "";
+                for (var i = 0; i < count; i++) {
+                    const part = readCookie(STORAGE_KEY + "-" + i);
+                    if (part == null) {
+                        return null;
+                    }
+                    payload += part;
+                }
+                return payload;
+            }
+
+            // Fallback: single cookie without chunk metadata.
+            return readCookie(STORAGE_KEY);
+        }
+
+        function writeStoredPayload(payload) {
+            clearStoredCookies();
+            const chunks = chunkString(payload, COOKIE_MAX_CHARS);
+            for (var i = 0; i < chunks.length; i++) {
+                writeCookie(STORAGE_KEY + "-" + i, chunks[i], COOKIE_MAX_AGE_DAYS);
+            }
+            writeCookie(STORAGE_META_KEY, String(chunks.length), COOKIE_MAX_AGE_DAYS);
+        }
+
+        function toPersistedTweet(tweet) {
+            // Cookies are size-limited; IDs/URLs are enough to recreate live embeds.
+            return {
+                id: String(tweet.id),
+                url: tweet.url || ("https://x.com/i/status/" + tweet.id)
+            };
+        }
+
+        function normalizeTweet(tweet) {
+            var copy = {
+                id: String(tweet.id),
+                url: tweet.url || ("https://x.com/i/status/" + tweet.id),
+                html: tweet.html ? (sanitizeEmbedHtml(tweet.html) || null) : null
+            };
+            return copy;
+        }
+
+        function migrateFromLocalStorage() {
+            try {
+                var storage = window.localStorage;
+                if (!storage) {
+                    return null;
+                }
+                const legacy = storage.getItem("embedded-tweet-viewer:v1");
+                if (!legacy) {
+                    return null;
+                }
+                const parsed = JSON.parse(legacy);
+                if (!Array.isArray(parsed)) {
+                    return null;
+                }
+                storage.removeItem("embedded-tweet-viewer:v1");
+                return parsed;
+            } catch (err) {
+                console.warn("Could not migrate legacy localStorage tweets", err);
+                return null;
+            }
+        }
+
         function loadTweets() {
             try {
-                const raw = localStorage.getItem(STORAGE_KEY);
+                const raw = readStoredPayload();
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed) && parsed.length) {
-                        return parsed.map(function (t) {
-                            var copy = Object.assign({}, t);
-                            if (copy.html) {
-                                copy.html = sanitizeEmbedHtml(copy.html) || null;
-                            }
-                            return copy;
-                        });
+                    if (Array.isArray(parsed)) {
+                        return {
+                            tweets: parsed.map(normalizeTweet),
+                            shouldPersist: false
+                        };
                     }
                 }
-            } catch (err) {
-                console.warn("Could not read saved tweets", err);
-            }
-            return DEFAULT_TWEETS.map(function (t) {
-                var copy = Object.assign({}, t);
-                if (copy.html) {
-                    copy.html = sanitizeEmbedHtml(copy.html) || copy.html;
+
+                const migrated = migrateFromLocalStorage();
+                if (migrated) {
+                    return {
+                        tweets: migrated.map(normalizeTweet),
+                        shouldPersist: true
+                    };
                 }
-                return copy;
-            });
+            } catch (err) {
+                console.warn("Could not read saved tweets from cookies", err);
+            }
+            return {
+                tweets: DEFAULT_TWEETS.map(normalizeTweet),
+                shouldPersist: false
+            };
         }
 
         function saveTweets() {
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(tweets));
+                const compact = tweets.map(toPersistedTweet);
+                writeStoredPayload(JSON.stringify(compact));
             } catch (err) {
-                console.warn("Could not save tweets", err);
+                console.warn("Could not save tweets to cookies", err);
             }
         }
 
@@ -660,7 +785,7 @@ or paste a full &lt;blockquote class=&quot;twitter-tweet&quot;&gt;…&lt;/blockq
                 setStatus("Gallery is already empty.", "error");
                 return;
             }
-            if (!confirm("Remove all embedded posts from this browser?")) {
+            if (!confirm("Remove all embedded posts saved in this browser's cookies?")) {
                 return;
             }
             tweets = [];
@@ -690,7 +815,14 @@ or paste a full &lt;blockquote class=&quot;twitter-tweet&quot;&gt;…&lt;/blockq
             }
         });
 
-        renderGallery();
+        (function init() {
+            const initialState = loadTweets();
+            tweets = initialState.tweets;
+            if (initialState.shouldPersist) {
+                saveTweets();
+            }
+            renderGallery();
+        })();
     </script>
 </body>
 </html>
