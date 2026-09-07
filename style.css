@@ -1,0 +1,14 @@
+.embed-card {
+  width: 550px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Force X's iframe container to respect the full card width */
+.embed-card iframe,
+.twitter-tweet-rendered {
+  width: 550px !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+}
